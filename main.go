@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/op/go-logging"
@@ -107,6 +108,20 @@ func buildNavigation(fullpath string, prefix string, rootName string) []navigati
 	return nav
 }
 
+type byName []os.FileInfo
+
+func (f byName) Len() int {
+	return len(f)
+}
+
+func (f byName) Swap(i int, j int) {
+	f[i], f[j] = f[j], f[i]
+}
+
+func (f byName) Less(i int, j int) bool {
+	return f[i].Name() < f[j].Name()
+}
+
 func (v *viewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	html, _ := Asset(v.tmpl)
 	t, err := template.New("").Parse(string(html))
@@ -116,6 +131,8 @@ func (v *viewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	files, err := ioutil.ReadDir(path.Join(v.root, r.URL.Path))
+
+	sort.Sort(byName(files))
 
 	t.Execute(w, struct {
 		Title      string
