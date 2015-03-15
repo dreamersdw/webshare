@@ -1,0 +1,12 @@
+<html>
+<head>
+    <title>{{.Title}}</title>
+</head>
+  <body>
+    {{ range $file := .Files }}
+    <div>
+        <a href="/fs/{{$file.Name}}"> {{ $file.Name }} </a>
+    </div>
+    {{ end }}
+  </body>
+</html>

@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
+	"text/template"
 
 	"github.com/op/go-logging"
 )
@@ -62,6 +64,29 @@ func (u *uploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type viewHandler struct {
+	root string
+	tmpl string
+}
+
+func (v *viewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	t, err := template.ParseFiles(v.tmpl)
+
+	if err != nil {
+		log.Warning("error %s", err)
+	}
+
+	files, err := ioutil.ReadDir(path.Join(v.root, r.URL.Path))
+	t.Execute(w, struct {
+		Title string
+		Files []os.FileInfo
+	}{"webshare", files})
+}
+
+func viewServer(root string, tmpl string) http.Handler {
+	return &viewHandler{root, tmpl}
+}
+
 func main() {
 	setupLogging()
 	log.Info("start webshare ...")
@@ -74,5 +99,6 @@ func main() {
 
 	http.Handle("/fs/", http.StripPrefix("/fs/", http.FileServer(http.Dir(dir))))
 	http.Handle("/upload/", uploadServer(dir))
+	http.Handle("/ui/", http.StripPrefix("/ui/", viewServer(dir, "static/template/view.html")))
 	http.ListenAndServe("0.0.0.0:8888", nil)
 }
