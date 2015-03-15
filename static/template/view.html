@@ -48,13 +48,13 @@
                 {{ end }}
               </td>
               <td>
-                {{ $file.Size }}
+                {{ $file.Size | humanizeBytes }}
               </td>
               <td>
                 {{ $file.Mode }}
               </td>
               <td>
-                {{ $file.ModTime }}
+                {{ $file.ModTime | humanizeTime }}
               </td>
             </tr>
             {{ end }}

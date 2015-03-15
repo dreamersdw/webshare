@@ -2,14 +2,18 @@ package main
 
 import (
 	"fmt"
-	"html/template"
+	"github.com/docopt/docopt-go"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
+	"text/template"
+	"time"
 
 	"github.com/op/go-logging"
 )
@@ -18,6 +22,19 @@ var (
 	log    = logging.MustGetLogger("main")
 	format = logging.MustStringFormatter(
 		"%{color}%{time:15:04:05.000} - %{level:.4s} %{color:reset} %{message}")
+	cfgPort = 8888
+	cfgPath = "/"
+)
+
+const (
+	version = "0.1"
+	usage   = `Usage:
+	webshare [--port=NUM] [PATH]
+	webshare --version
+	webshare --help
+
+Example:
+    webshare --port 8888 /var/log/`
 )
 
 func setupLogging() {
@@ -122,9 +139,34 @@ func (f byName) Less(i int, j int) bool {
 	return f[i].Name() < f[j].Name()
 }
 
+func humanize(value int64, units []string) (float64, string) {
+	index := int(math.Log(float64(value)) / math.Log(float64(1024)))
+	if index >= len(units) {
+		index = len(units) - 1
+	} else if index < 0 {
+		index = 0
+	}
+	return float64(value) / (math.Pow(float64(1024), float64(index))), units[index]
+}
+
+func humanizeBytes(value interface{}) string {
+	n, _ := strconv.ParseInt(fmt.Sprint(value), 10, 64)
+	v, u := humanize(n, []string{"B", "KB", "MB", "GB", "TB", "PB", "EB"})
+	return fmt.Sprintf("%.1f %s", v, u)
+}
+
+func humanizeTime(value interface{}) string {
+	t := value.(time.Time)
+	return t.Format("2006-01-02 15:04:05")
+}
+
 func (v *viewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	html, _ := Asset(v.tmpl)
-	t, err := template.New("").Parse(string(html))
+	funcMap := template.FuncMap{
+		"humanizeBytes": humanizeBytes,
+		"humanizeTime":  humanizeTime,
+	}
+	t, err := template.New("").Funcs(funcMap).Parse(string(html))
 
 	if err != nil {
 		log.Warning("error %s", err)
@@ -152,19 +194,59 @@ func viewServer(root string, tmpl string) http.Handler {
 }
 
 func main() {
-	setupLogging()
-	log.Info("start webshare ...")
-	dir, err := os.Getwd()
+	opt, err := docopt.Parse(usage, nil, false, "", false, false)
 
 	if err != nil {
-		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	http.Handle("/fs/", http.StripPrefix("/fs/", http.FileServer(http.Dir(dir))))
-	http.Handle("/ui/", http.StripPrefix("/ui/", viewServer(dir, "static/template/view.html")))
-	http.Handle("/upload/", uploadServer(dir))
+	if opt["--help"].(bool) {
+		fmt.Println(usage)
+		return
+	}
+
+	if opt["--version"].(bool) {
+		fmt.Println(version)
+		return
+	}
+
+	if opt["PATH"] != nil {
+		cfgPath = opt["PATH"].(string)
+	} else {
+		dir, err := os.Getwd()
+
+		if err != nil {
+			fmt.Println("error when get working path", err)
+			os.Exit(1)
+		}
+		cfgPath = dir
+	}
+
+	if opt["--port"] != nil {
+		port, err := strconv.Atoi(opt["--port"].(string))
+
+		if err != nil {
+			fmt.Println("error when parse port")
+			os.Exit(1)
+		}
+
+		cfgPort = port
+	}
+
+	setupLogging()
+
+	address := fmt.Sprintf("0.0.0.0:%d", cfgPort)
+
+	log.Info("start webshare on %s ...", address)
+
+	http.Handle("/fs/", http.StripPrefix("/fs/", http.FileServer(http.Dir(cfgPath))))
+	http.Handle("/ui/", http.StripPrefix("/ui/", viewServer(cfgPath, "static/template/view.html")))
+	http.Handle("/upload/", uploadServer(cfgPath))
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(assetFS())))
 	http.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
-	http.ListenAndServe("0.0.0.0:8888", nil)
+	e := http.ListenAndServe(address, nil)
+	if e != nil {
+		log.Error("%s", e)
+		os.Exit(1)
+	}
 }
