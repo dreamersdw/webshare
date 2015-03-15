@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
-	"text/template"
+	"strings"
 
 	"github.com/op/go-logging"
 )
@@ -43,7 +44,8 @@ func (u *uploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dst := path.Join(u.root, path.Base(fileHeader.Filename))
+	dir := strings.TrimPrefix(r.URL.Path, "/upload/")
+	dst := path.Join(u.root, dir, path.Base(fileHeader.Filename))
 
 	outFile, err := os.Create(dst)
 	if err != nil {
@@ -61,7 +63,14 @@ func (u *uploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info("upload file %s with size %d successfully\n", fileHeader.Filename, size)
-	w.WriteHeader(http.StatusNoContent)
+
+	url := r.Header.Get("Referer")
+
+	if url != "" {
+		http.Redirect(w, r, url, http.StatusFound)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 type viewHandler struct {
@@ -69,18 +78,56 @@ type viewHandler struct {
 	tmpl string
 }
 
+type navigation struct {
+	Name   string
+	Href   string
+	IsLast bool
+}
+
+func buildNavigation(fullpath string, prefix string, rootName string) []navigation {
+	if !strings.HasPrefix(fullpath, "/") {
+		fullpath = "/" + fullpath
+	}
+	parts := strings.Split(fullpath, "/")
+
+	nav := make([]navigation, len(parts))
+	nav[0].Name = "Home"
+	nav[0].Href = rootName + "/"
+	nav[0].IsLast = false
+
+	for i := 1; i < len(parts); i++ {
+		nav[i].Name = parts[i]
+		nav[i].Href = rootName + "/" + strings.Join(parts[0:i+1], "/")
+		if i == len(parts)-1 {
+			nav[i].IsLast = true
+		} else {
+			nav[i].IsLast = false
+		}
+	}
+	return nav
+}
+
 func (v *viewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	t, err := template.ParseFiles(v.tmpl)
+	html, _ := Asset(v.tmpl)
+	t, err := template.New("").Parse(string(html))
 
 	if err != nil {
 		log.Warning("error %s", err)
 	}
 
 	files, err := ioutil.ReadDir(path.Join(v.root, r.URL.Path))
+
 	t.Execute(w, struct {
-		Title string
-		Files []os.FileInfo
-	}{"webshare", files})
+		Title      string
+		Path       string
+		Navigation []navigation
+		Files      []os.FileInfo
+	}{
+		"webshare",
+		r.URL.Path,
+		buildNavigation(r.URL.Path, "", "/ui"),
+		files,
+	})
 }
 
 func viewServer(root string, tmpl string) http.Handler {
@@ -98,7 +145,9 @@ func main() {
 	}
 
 	http.Handle("/fs/", http.StripPrefix("/fs/", http.FileServer(http.Dir(dir))))
-	http.Handle("/upload/", uploadServer(dir))
 	http.Handle("/ui/", http.StripPrefix("/ui/", viewServer(dir, "static/template/view.html")))
+	http.Handle("/upload/", uploadServer(dir))
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(assetFS())))
+	http.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
 	http.ListenAndServe("0.0.0.0:8888", nil)
 }

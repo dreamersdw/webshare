@@ -1,12 +1,67 @@
 <html>
-<head>
+  <head>
     <title>{{.Title}}</title>
-</head>
+
+    <link rel="stylesheet" href="/static/bootstrap/css/bootstrap.css">
+    <link rel="stylesheet" href="/static/bootstrap-fileinput/css/fileinput.css">
+
+    <script src="/static/jquery/jquery.js"></script>
+    <script src="/static/bootstrap-fileinput/js/fileinput.js"></script>
+    <script src="/static/bootstrap/js/bootstrap.js"></script>
+
+  </head>
   <body>
-    {{ range $file := .Files }}
-    <div>
-        <a href="/fs/{{$file.Name}}"> {{ $file.Name }} </a>
+    <div class="container-fluid">
+      <div class="row">
+        <div class="text-center text-primary"> <h1> Webshare </h1></div>
+        <div class="col-md-1"></div>
+        <div class="col-md-10">
+
+          <ol class="breadcrumb">
+            {{ range $index, $item := .Navigation }}
+                {{ if $item.IsLast }} 
+                    <li class="active">{{ $item.Name }} </li>
+                 {{ else }}
+                    <li><a href="{{ $item.Href }}">{{ $item.Name }} </a></li>
+                 {{ end }}
+            {{ end }}
+          </ol>
+
+          <form action="/upload/{{.Path}}" method="POST"  enctype="multipart/form-data">
+            <input name="file" type="file" class="file">
+          </form>
+
+          <table class="table table-hover">
+            <tr>
+              <th> Name </th>
+              <th> Size </th>
+              <th> Mode </th>
+              <th> Modify </th>
+            </tr>
+            {{ range $file := .Files }}
+            <tr>
+              <td>
+                {{ if $file.IsDir }}
+                <a href="/ui/{{$.Path}}/{{$file.Name}}"> {{ $file.Name }}/ </a>
+                {{ else }}
+                <a href="/fs/{{$.Path}}/{{$file.Name}}"> {{ $file.Name }} </a>
+                {{ end }}
+              </td>
+              <td>
+                {{ $file.Size }}
+              </td>
+              <td>
+                {{ $file.Mode }}
+              </td>
+              <td>
+                {{ $file.ModTime }}
+              </td>
+            </tr>
+            {{ end }}
+          </table>
+        </div>
+        <div class="col-md-1"></div>
+      </div>
     </div>
-    {{ end }}
   </body>
 </html>
