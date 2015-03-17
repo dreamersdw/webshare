@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/docopt/docopt-go"
 	"io"
 	"io/ioutil"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -15,6 +15,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/docopt/docopt-go"
 	"github.com/op/go-logging"
 )
 
@@ -193,6 +194,31 @@ func viewServer(root string, tmpl string) http.Handler {
 	return &viewHandler{root, tmpl}
 }
 
+func promoteServerAddress(port int) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println("====================================")
+	for _, addr := range addrs {
+		if strings.Contains(addr.String(), ":") {
+			continue
+		}
+
+		parts := strings.Split(addr.String(), "/")
+
+		ip := parts[0]
+
+		if ip == "127.0.0.1" {
+			continue
+		}
+
+		fmt.Printf("http://%s:%d\n", ip, port)
+	}
+	fmt.Println("====================================")
+}
+
 func main() {
 	opt, err := docopt.Parse(usage, nil, false, "", false, false)
 
@@ -237,8 +263,9 @@ func main() {
 
 	address := fmt.Sprintf("0.0.0.0:%d", cfgPort)
 
-	log.Info("start webshare on %s ...", address)
+	promoteServerAddress(cfgPort)
 
+	log.Info("start webshare on %s ...", address)
 	http.Handle("/fs/", http.StripPrefix("/fs/", http.FileServer(http.Dir(cfgPath))))
 	http.Handle("/ui/", http.StripPrefix("/ui/", viewServer(cfgPath, "static/template/view.html")))
 	http.Handle("/upload/", uploadServer(cfgPath))
