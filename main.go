@@ -219,10 +219,44 @@ func promoteServerAddress(port int) {
 	fmt.Println("====================================")
 }
 
+type AuditWriter struct {
+	writer     http.ResponseWriter
+	statusCode int
+}
+
+func (aw *AuditWriter) Header() http.Header {
+	return aw.writer.Header()
+}
+
+func (aw *AuditWriter) Write(content []byte) (int, error) {
+	return aw.writer.Write(content)
+}
+
+func (aw *AuditWriter) WriteHeader(code int) {
+	aw.statusCode = code
+	aw.writer.WriteHeader(code)
+}
+
+func (aw *AuditWriter) StatusCode() int {
+	return aw.statusCode
+}
+
+func fromWriter(w http.ResponseWriter) http.ResponseWriter {
+	return &AuditWriter{w, 200}
+
+}
+
 func Log(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Info("%s %s %s", r.RemoteAddr, r.Method, r.URL)
-		handler.ServeHTTP(w, r)
+		aw := fromWriter(w)
+
+		start := time.Now()
+		handler.ServeHTTP(aw, r)
+		end := time.Now()
+
+		delta := float64(end.Sub(start).Nanoseconds()) / 1000000.0
+
+		log.Info("%s %s %s %d in %.1f ms", r.RemoteAddr, r.Method, r.URL, aw.(*AuditWriter).StatusCode(), delta)
 	})
 }
 
