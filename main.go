@@ -219,6 +219,13 @@ func promoteServerAddress(port int) {
 	fmt.Println("====================================")
 }
 
+func Log(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Info("%s %s %s", r.RemoteAddr, r.Method, r.URL)
+		handler.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	opt, err := docopt.Parse(usage, nil, false, "", false, false)
 
@@ -271,7 +278,7 @@ func main() {
 	http.Handle("/upload/", uploadServer(cfgPath))
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(assetFS())))
 	http.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
-	e := http.ListenAndServe(address, nil)
+	e := http.ListenAndServe(address, Log(http.DefaultServeMux))
 	if e != nil {
 		log.Error("%s", e)
 		os.Exit(1)
