@@ -8,6 +8,12 @@
     <script src="/static/jquery/jquery.js"></script>
     <script src="/static/bootstrap-fileinput/js/fileinput.js"></script>
     <script src="/static/bootstrap/js/bootstrap.js"></script>
+    <script src="/static/stupidtable.js"></script>
+    <script>
+        $(document).ready(function() {
+          $(".table").stupidtable();
+        })
+    </script>
 
   </head>
   <body>
@@ -32,12 +38,12 @@
           </form>
 
           <table class="table table-hover">
-            <tr>
-              <th> Name </th>
-              <th> Size </th>
-              <th> Mode </th>
-              <th> Modify </th>
-            </tr>
+            <thead>
+              <th data-sort="string"> Name </th>
+              <th data-sort="string"> Size </th>
+              <th data-sort="string"> Mode </th>
+              <th data-sort="string"> Modify </th>
+            </thead>
             {{ range $file := .Files }}
             <tr>
               <td>
